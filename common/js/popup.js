@@ -1,16 +1,23 @@
-/*globals $, get_browser, default_width, default_height*/
+/*globals get_browser, default_width, default_height*/
 
 //https://stackoverflow.com/questions/10073699/pad-a-number-with-leading-zeros-in-javascript#answer-10074204
-function zeroPad(num, places) {
-    "use strict";
-    if (num.toString().length >= places) {
-        return num;
-    }
-    return String(Math.pow(10, places) + Math.floor(num)).substring(1);
+// TODO: need this?
+// function zeroPad(num, places) {
+//     "use strict";
+//     if (num.toString().length >= places) {
+//         return num;
+//     }
+//     return String(Math.pow(10, places) + Math.floor(num)).substring(1);
+// }
+
+//https://stackoverflow.com/questions/19469881/remove-all-event-listeners-of-specific-type/46986927#46986927
+function stopAllListeners(element, type) {
+    element.addEventListener(type, function (event) {
+        event.stopPropagation();
+    }, true);
 }
 
 var currentPanel = null;
-
 var background = get_browser().extension.getBackgroundPage();
 
 function initBodySize() {
@@ -21,42 +28,45 @@ function initBodySize() {
     if (localStorage.bodyHeight === undefined || localStorage.bodyHeight === 0) {
         localStorage.bodyHeight = default_height;
     }
-    $("#bodyWidth").val(localStorage.bodyWidth);
-    $("#bodyHeight").val(localStorage.bodyHeight);
+    let bodyWidth = document.getElementById("bodyWidth");
+    let bodyHeight = document.getElementById("bodyWidth");
+
+    bodyWidth.value = localStorage.bodyWidth;
+    bodyHeight.value = localStorage.bodyHeight;
 }
 
 function goToPanel(id) {
     "use strict";
-    var panel = $(id);
+    let panel = document.getElementById(id);
     if (currentPanel !== null) {
-        if (currentPanel.attr("id") === panel.attr("id")) {
+        if (currentPanel.id === id) {
             return;
         }
         //hide the other panel
-        currentPanel.hide();
+        currentPanel.hidden = true;
     }
     currentPanel = panel;
-    currentPanel.show();
+    currentPanel.hidden = false;
 }
 
 function goToLogin() {
     "use strict";
-    goToPanel("#rightPanel");
+    goToPanel("rightPanel");
 }
 
 function goToStations() {
     "use strict";
-    goToPanel("#midPanel");
+    goToPanel("midPanel");
 }
 
 function goToPlayer() {
     "use strict";
-    goToPanel("#leftPanel");
+    goToPanel("leftPanel");
 }
 
 function clearHistory() {
     "use strict";
-    var historyList = document.getElementById("historyList");
+    let historyList = document.getElementById("historyList");
     while (historyList.hasChildNodes()) {
         historyList.removeChild(historyList.firstChild);
     }
@@ -68,10 +78,13 @@ function downloadSong(url, title) {
 
     //trim the title of the song to 15 characters... not a perfect solution, but there were issues with it at full length
     title = title.substring(0, 15);
-    var a = $("<a href=\"" + url + "\" download=\"" + title + ".mp4\">HELLO</a>");
-    a.appendTo("body");
-    a[0].click();
-    a.remove();
+
+    let a = document.createElement("a");
+    a.setAttribute("href", url);
+    a.setAttribute("download", title + ".mp4");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 function updateHistory() {
@@ -91,7 +104,7 @@ function updateHistory() {
 
         var nameCell = row.insertCell();
         nameCell.noWrap = true;
-        nameCell.style = "max-width:" + ($("body").width() * 0.5) + "px";
+        nameCell.style = "max-width:" + (document.body.offsetWidth * 0.5) + "px";
 
         var name = document.createElement("span");
         name.setAttribute("data-history", i);
@@ -116,238 +129,319 @@ function updateHistory() {
         dlCell.appendChild(dlImage);
     });
 
-    $(".historyInfoLink").bind("click", function (e) {
-        var historyNum = e.target.dataset.history;
-        var song = background.prevSongs[historyNum];
-        get_browser().tabs.create({
-            "url": song.songDetailUrl
+    let historyLinks = document.getElementsByClassName("historyInfoLink");
+    for (let i = 0; i < historyLinks.length; ++i) {
+        historyLinks[i].addEventListener("click", function (e) {
+            var historyNum = e.target.dataset.history;
+            var song = background.prevSongs[historyNum];
+            get_browser().tabs.create({
+                "url": song.songDetailUrl
+            });
         });
-    });
-    $(".historyLike").bind("click", function (e) {
-        var historyNum = e.target.dataset.history;
-        background.addFeedback(historyNum, true);
+    }
 
-        $(e.target).unbind("click").attr("src", "images/thumbUpCheck.png");
-    });
-    $(".historyDownload").bind("click", function (e) {
-        var historyNum = e.target.dataset.history;
-        var song = background.prevSongs[historyNum];
+    let historyLikes = document.getElementsByClassName("historyLike");
+    for (let i = 0; i < historyLikes.length; ++i) {
+        historyLikes[i].addEventListener("click", function (e) {
+            var historyNum = e.target.dataset.history;
+            background.addFeedback(historyNum, true);
 
-        downloadSong(song.audioUrlMap.highQuality.audioUrl, song.songName);
-    });
+            stopAllListeners(e.target, "click");
+            e.target.src = "images/thumbUpCheck.png";
+        });
+    }
+
+    let historyDownload = document.getElementsByClassName("historyLike");
+    for (let i = 0; i < historyDownload.length; ++i) {
+        historyDownload[i].addEventListener("click", function (e) {
+            var historyNum = e.target.dataset.history;
+            var song = background.prevSongs[historyNum];
+
+            downloadSong(song.audioUrlMap.highQuality.audioUrl, song.songName);
+        });
+    }
 }
 
 function goToHistory() {
     "use strict";
-    goToPanel("#historyPanel");
+    goToPanel("historyPanel");
     updateHistory();
 }
 
 function addStations() {
     "use strict";
     background.stationList.forEach(function (station) {
-        $("#stationList").append(new Option(station.stationName, station.stationToken));
+        let stationListE = document.getElementById("stationList");
+        stationListE.appendChild(new Option(station.stationName, station.stationToken));
     });
 }
 
 function updatePlayer() {
     "use strict";
     if (background.currentSong) {
-        $("#coverArt").unbind().bind("click", function () {
+        let coverArt = document.getElementById("coverArt");
+        coverArt.addEventListener("click", function () {
             get_browser().tabs.create({
                 "url": background.currentSong.albumDetailUrl
             });
-        }).attr("src", background.currentSong.albumArtUrl);
-        $("#artistLink").unbind().text(background.currentSong.artistName);
-        $("#titleLink").unbind().text(background.currentSong.songName);
-        $("#artistLink").unbind().bind("click", function () {
+        });
+        coverArt.src = background.currentSong.albumArtUrl;
+
+        let artistLink = document.getElementById("artistLink");
+        artistLink.innerText = background.currentSong.artistName;
+        artistLink.addEventListener("click", function () {
             get_browser().tabs.create({
                 "url": background.currentSong.artistDetailUrl
             });
-        }).text(background.currentSong.artistName);
-        $("#titleLink").unbind().bind("click", function () {
+        });
+
+        let titleLink = document.getElementById("titleLink");
+        titleLink.innerText = background.currentSong.songName;
+        titleLink.addEventListener("click", function () {
             get_browser().tabs.create({
                 "url": background.currentSong.songDetailUrl
             });
-        }).text(background.currentSong.songName);
-        $("#dash").text(" - ");
+        });
+
+        document.getElementById("dash").innerText = " - ";
+
+        let tUpButton = document.getElementById("tUpButton");
+        //let tDownButton = document.getElementById("tUpButton");
+
         if (background.currentSong.songRating) {
-            $("#tUpButton").unbind("click").attr("src", "images/thumbUpCheck.png");
+            stopAllListeners(tUpButton, "click");
+            tUpButton.src = "images/thumbUpCheck.png";
         } else {
-            $("#tUpButton").attr("src", "images/thumbup.png");
-            $("#tUpButton").click(function () {
+            tUpButton.src = "images/thumbup.png";
+            tUpButton.addEventListener("click", function () {
                 background.addFeedback(-1, true);
-                $("#tUpButton").attr("src", "images/thumbUpCheck.png");
-                $("#tUpButton").unbind("click");
+                tUpButton.src = "images/thumbUpCheck.png";
+                stopAllListeners(tUpButton, "click");
             });
         }
     }
 
+    let playButton = document.getElementById("playButton");
+    let pauseButton = document.getElementById("playButton");
     if (background.mp3Player.paused) {
-        $("#playButton").show();
-        $("#pauseButton").hide();
+        playButton.hidden = false;
+        pauseButton.hidden = true;
     } else {
-        $("#playButton").hide();
-        $("#pauseButton").show();
+        playButton.hidden = true;
+        pauseButton.hidden = false;
     }
 
-    $(".scrollerText").hover(function (e) {
-        if ($(e.target).width() > $(e.target).parent().width()) {
-            var newLeft = $(e.target).parent().width() - ($(e.target).width());
-            var speed = Math.round(($(e.target).width() - $(e.target).parent().width() + $(e.target).position().left) * 10);
-            $(e.target).stop().delay(500).animate({
-                left: newLeft
-            }, speed);
+    let scrollerText = document.getElementById("scrollerText");
+    scrollerText.addEventListener("mouseover", function (e) {
+        if (e.target.offsetWidth > e.target.parentElement.offsetWidth) {
+            var newLeft = e.target.parentElement.offsetWidth - e.target.offsetWidth;
+            var speed = Math.round((e.target.offsetWidth - e.target.parentElement.offsetWidth + e.target.offsetLeft) * 10);
+            setTimeout(function() {
+                e.target.animate([
+                    {left: newLeft}
+                ], {
+                    duration: speed,
+                });
+            }, 500);
         }
-    }, function (e) {
+    });
+    scrollerText.addEventListener("mouseout", function (e) {
         //move it to left immediately
-        $(e.target).stop().css({
-            left: 0
-        });
+        e.target.style.left = 0;
     });
-    $("#scrubber").slider({
-        value: 0
-    });
+
+    //let scrubber = document.getElementById("scrubber");
+    //scrubber.THIS IS THE HARDEST PART = FUCK;
+    //TODO: 
+    // $("#scrubber").slider({
+    //     value: 0
+    // });
 }
 
 function drawPlayer() {
     "use strict";
-    var curMinutes = Math.floor(background.mp3Player.currentTime / 60),
-        curSecondsI = Math.ceil(background.mp3Player.currentTime % 60),
-        curSeconds = zeroPad(curSecondsI.length === 1
-            ? "0" + curSecondsI
-            : curSecondsI, 2),
-        totalMinutes = Math.floor(background.mp3Player.duration / 60),
-        totalSecondsI = Math.ceil(background.mp3Player.duration % 60),
-        totalSeconds = zeroPad(totalSecondsI.length === 1
-            ? "0" + totalSecondsI
-            : totalSecondsI, 2);
+    //TODO: fuuuk
 
-    $("#scrubber").slider({
-        value: (background.mp3Player.currentTime / background.mp3Player.duration) * 100
-    }).attr("title", curMinutes + ":" + curSeconds + "/" + totalMinutes + ":" + totalSeconds);
+    // var curMinutes = Math.floor(background.mp3Player.currentTime / 60),
+    //     curSecondsI = Math.ceil(background.mp3Player.currentTime % 60),
+    //     curSeconds = zeroPad(curSecondsI.length === 1
+    //         ? "0" + curSecondsI
+    //         : curSecondsI, 2),
+    //     totalMinutes = Math.floor(background.mp3Player.duration / 60),
+    //     totalSecondsI = Math.ceil(background.mp3Player.duration % 60),
+    //     totalSeconds = zeroPad(totalSecondsI.length === 1
+    //         ? "0" + totalSecondsI
+    //         : totalSecondsI, 2);
+
+    // $("#scrubber").slider({
+    //     value: (background.mp3Player.currentTime / background.mp3Player.duration) * 100
+    // }).attr("title", curMinutes + ":" + curSeconds + "/" + totalMinutes + ":" + totalSeconds);
 }
 
-$(document).ready(function () {
+document.addEventListener("DOMContentLoaded", function () {
     "use strict";
-    $("body").bind("click", function (e) {
-        if (e.target.id !== "artistLink" && e.target.id !== "titleLink") {
-            $(".details").hide();
-        }
-    });
+    // document.body.addEventListener("click")
+    // UWOTM8???
+    // $("body").bind("click", function (e) {
+    //     if (e.target.id !== "artistLink" && e.target.id !== "titleLink") {
+    //         $(".details").hide();
+    //     }
+    // });
     initBodySize();
-    $("body").width(localStorage.bodyWidth);
-    $("body").height(localStorage.bodyHeight);
+    document.body.style.width = localStorage.bodyWidth + "px";
+    document.body.style.height = localStorage.bodyHeight + "px";
 
-    var scrollerWidth = $("body").width() * 0.6;
-    $(".scrollerContainer").width(scrollerWidth);
+    let scrollerContainer = document.getElementById("nowPlayingContainer");
+    scrollerContainer.style.width = (localStorage.bodyWidth * 0.6) + "px";
 
-    $(".panel,#historyDiv").css({
-        "height": $("body").height(),
-        "width": $("body").width()
-    });
-    $("#historyDiv,#historyList").css({
-        "width": $("body").width() - 20
-    });
-    $("#volume").css({
-        "height": $("body").height() - 5
-    });
-    $("#coverArt").css({
-        "min-width": Math.min($("body").height() * 0.75, $("body").width() * 0.1)
-    });
+    let panels = document.getElementsByClassName("panel");
+    for(let i = 0; i < panels.length; ++i) {
+        panels[i].style.width = localStorage.bodyWidth + "px";
+        panels[i].style.height = localStorage.bodyHeight + "px";
 
-    if (background.mp3Player.paused) {
-        $("pauseButton").hide();
-        $("playButton").show();
-    } else {
-        $("pauseButton").show();
-        $("playButton").hide();
+        panels[i].hidden = true;
     }
-    $(".panel").hide();
 
-    $("#scrubber").slider({
-        range: "min",
-        min: 0,
-        slide: function (ignore, ui) {
-            background.mp3Player.currentTime = background.mp3Player.duration * (ui.value / 100);
-        },
-        change: function (ignore, ui) {
-            $(ui.handle).removeClass("ui-state-focus");
-        }
-    });
+    let historyDiv = document.getElementById("historyDiv");
+    historyDiv.style.height = localStorage.bodyHeight + "px";
 
-    $("#playButton").bind("click", function () {
+    let historyList = document.getElementById("historyList");
+    historyDiv.style.width = (localStorage.bodyWidth - 20) + "px";
+    historyList.style.width = (localStorage.bodyWidth - 20) +  + "px";
+
+    //fuuuuuuuk
+    let volume = document.getElementById("volume");
+    volume.style.height = (localStorage.bodyHeight - 5)  + "px";
+
+    let coverArt = document.getElementById("coverArt");
+    coverArt.style.minWidth = Math.min(localStorage.bodyHeight * 75, localStorage.bodyWidth * .1) + "px";
+
+    let playButton = document.getElementById("playButton");
+    let pauseButton = document.getElementById("pauseButton");
+    if (background.mp3Player.paused) {
+        playButton.hidden = false;
+        pauseButton.hidden = true;
+    } else {
+        playButton.hidden = true;
+        pauseButton.hidden = false;
+    }
+
+    //TODO: fuuuuuuuk
+    // $("#scrubber").slider({
+    //     range: "min",
+    //     min: 0,
+    //     slide: function (ignore, ui) {
+    //         background.mp3Player.currentTime = background.mp3Player.duration * (ui.value / 100);
+    //     },
+    //     change: function (ignore, ui) {
+    //         $(ui.handle).removeClass("ui-state-focus");
+    //     }
+    // });
+
+    playButton.addEventListener("click", function () {
         play_audio();
     });
-    $("#pauseButton").bind("click", function () {
+    pauseButton.addEventListener("click", function () {
         pause_audio();
     });
-    $("#skipButton").bind("click", background.nextSong);
-    $("#tUpButton").bind("click", function () {
+
+    let skipButton = document.getElementById("skipButton");
+    skipButton.addEventListener("click", background.nextSong);
+
+    let tUpButton = document.getElementById("tUpButton");
+    tUpButton.addEventListener("click", function () {
         background.addFeedback(-1, true);
         if (background.currentSong.songRating === true) {
-            $("#tUpButton").unbind("click").attr("src", "images/thumbUpCheck.png");
+            stopAllListeners(tUpButton, "click");
+            tUpButton.src = "images/thumbUpCheck.png";
         }
     });
-    $("#tDownButton").bind("click", function () {
+
+    let tDownButton = document.getElementById("tDownButton");
+    tDownButton.addEventListener("click", function () {
         background.addFeedback(-1, false);
         setTimeout(function () {
             background.nextSong();
         }, 1000); // Small delay to stop extension from freezing for some reason
     });
-    $("#sleepButton").bind("click", function () {
+
+    let sleepButton = document.getElementById("sleepButon");
+    sleepButton.addEventListener("click", function () {
         background.sleepSong();
         background.nextSong();
     });
-    $("#downloadButton").bind("click", function () {
+
+    let downloadButton = document.getElementById("downloadButton");
+    downloadButton.addEventListener("click", function () {
         background.downloadSong();
     });
-    $("#moreInfoButton").bind("click", function () {
+
+    let moreInfoButton = document.getElementById("moreInfoButton");
+    moreInfoButton.addEventListener("click", function() {
         window.open("options.htm", "_blank");
     });
-    $("#volume").slider({
-        orientation: "vertical",
-        range: "min",
-        min: 0,
-        max: 70,
-        value: (localStorage.volume)
-            ? localStorage.volume * 100
-            : 20,
-        slide: function (ignore, ui) {
-            background.mp3Player.volume = ui.value / 100;
-        },
-        stop: function (ignore, ui) {
-            $(ui.handle).removeClass("ui-state-focus");
-            localStorage.volume = ui.value / 100;
-        }
-    });
-    $("#nextButton").bind("click", function () {
+
+    //TODO: fuuuuuuuk
+    // $("#volume").slider({
+    //     orientation: "vertical",
+    //     range: "min",
+    //     min: 0,
+    //     max: 70,
+    //     value: (localStorage.volume)
+    //         ? localStorage.volume * 100
+    //         : 20,
+    //     slide: function (ignore, ui) {
+    //         background.mp3Player.volume = ui.value / 100;
+    //     },
+    //     stop: function (ignore, ui) {
+    //         $(ui.handle).removeClass("ui-state-focus");
+    //         localStorage.volume = ui.value / 100;
+    //     }
+    // });
+
+    let nextButton = document.getElementById("nextButton");
+    nextButton.addEventListener("click", function () {
         //move to midpanel
         goToStations();
     });
-    $("#stationList").bind("change", function () {
-        background.nextSongStation($("#stationList").val());
+
+    let stationList = document.getElementById("stationList");
+    stationList.addEventListener("change", function () {
+        background.nextSongStation(stationList.selectedOptions[0].value);
         goToPlayer();
     });
-    $("#unWarning").hide();
-    $("#pwWarning").hide();
-    $("#rightWarnRow").hide();
-    $("#login").bind("submit", function () {
-        localStorage.username = $("#username").val();
-        localStorage.password = $("#password").val();
+
+    let unWarning = document.getElementById("unWarning");
+    unWarning.hidden = true;
+
+    let pwWarning = document.getElementById("pwWarning");
+    pwWarning.hidden = true;
+
+    let rightWarnRow = document.getElementById("rightWarnRow");
+    rightWarnRow.hidden = true;
+
+    let login = document.getElementById("login");
+    login.addEventListener("submit", function () {
+        let username = document.getElementById("username");
+        let password = document.getElementById("password");
+
+        localStorage.username = username.value;
+        localStorage.password = password.value;
         background.partnerLogin();
         if (background.userAuthToken === "") {
-            $("#unWarning").show();
-            $("#pwWarning").show();
-            $("#rightWarnRow").show();
-            $("#username").css({
-                "padding-left": "16px",
-                "width": "216px"
-            });
-            $("#password").css({
-                "padding-left": "16px",
-                "width": "216px"
-            });
+            unWarning.hidden = false;
+            pwWarning.hidden = false;
+            rightWarnRow.hidden = false;
+
+            //TODO: WHY?
+            // $("#username").css({
+            //     "padding-left": "16px",
+            //     "width": "216px"
+            // });
+            // $("#password").css({
+            //     "padding-left": "16px",
+            //     "width": "216px"
+            // });
             return false;
         } else {
             addStations();
@@ -376,13 +470,18 @@ $(document).ready(function () {
         }
     }
 
-    $("#prevButton").bind("click", function () {
+    let prevButton = document.getElementById("prevButton");
+    prevButton.addEventListener("click", function () {
         goToPlayer();
     });
-    $("#history").bind("click", function () {
+
+    let historyButton = document.getElementById("history");
+    historyButton.addEventListener("click", function () {
         goToHistory();
     });
-    $("#noHistory").bind("click", function () {
+
+    let noHistoryButton = document.getElementById("noHistory");
+    noHistoryButton.addEventListener("click", function () {
         goToPlayer();
     });
 
@@ -398,13 +497,22 @@ $(document).ready(function () {
 
 function pause_audio () {
     background.mp3Player.pause();
-    $("#pauseButton").hide();
-    $("#playButton").show();
+
+    let playButton = document.getElementById("playButton");
+    let pauseButton = document.getElementById("pauseButton");
+
+    pauseButton.hidden = true;
+    playButton.hidden = false;
 }
 
 function play_audio () {
     background.play(localStorage.lastStation);
-    $("#playButton").hide();
+
+    let playButton = document.getElementById("playButton");
+    let pauseButton = document.getElementById("pauseButton");
+
+    pauseButton.hidden = false;
+    playButton.hidden = true;
 }
 
 background.setCallbacks(updatePlayer, drawPlayer, downloadSong);

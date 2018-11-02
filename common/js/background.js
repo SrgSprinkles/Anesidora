@@ -1,10 +1,11 @@
-/*global $, partnerLogin, getPlaylist, mp3Player, currentPlaylist, platform_specific, get_browser, is_android*/
+/*global partnerLogin, getPlaylist, currentPlaylist, platform_specific, get_browser, is_android*/
 /*exported setCallbacks, play, downloadSong, nextSongStation*/
 
 var callback;
 var currentSong;
 var comingSong;
 var prevSongs = [];
+var mp3Player;
 
 function setCallbacks(updatePlayer,drawPlayer,downloadSong){
     callback = {
@@ -24,7 +25,7 @@ function play(stationToken) {
         if (currentSong === undefined) {
             getPlaylist(localStorage.lastStation);
         }
-        if (document.getElementById("mp3Player").currentTime > 0) {
+        if (mp3Player.currentTime > 0) {
             mp3Player.play();
         } else {
             nextSong();
@@ -64,41 +65,26 @@ function nextSong(depth=1) {
     } else {
         song_url = currentSong.audioUrlMap.highQuality.audioUrl;
     }
+
     mp3Player.setAttribute("src", song_url);
     mp3Player.play();
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("HEAD", song_url);
-    xhr.onerror = function () {
+    let xhr = new XMLHttpRequest();
+    xhr.open("HEAD", song_url, true);
+
+    xhr.addEventListener("error", function() {
+        //if the HEAD fails then get a new song
         nextSong(depth + 1);
-    };
-    xhr.onload = function() {
+    });
+
+    xhr.addEventListener("load", function() {
+        //if the HEAD succeeds then the song can be loaded properly
         if (xhr.status >= 300){
-            //purge the current list, then run this function again
+            //if the HEAD fails then get a new song
             nextSong(depth + 1);
         }
-        if (localStorage.notifications === "true") {
-            var options = {
-                type: "list",
-                title: "Now playing:\r\n" + currentSong.artistName + " - " + currentSong.songName,
-                message: "by " + currentSong.artistName,
-                eventTime: 5000,
-                items: [
-                    { title: "", message: "Coming next: " },
-                    { title: "", message: comingSong.artistName + " - " + comingSong.songName }
-                ]
-            };
-    
-            var xhr2 = new XMLHttpRequest();
-            xhr2.open("GET", currentSong.albumArtUrl);
-            xhr2.responseType = "blob";
-            xhr2.onload = function(){
-                var blob = this.response;
-                options.iconUrl = window.URL.createObjectURL(blob);
-            };
-            xhr2.send(null);
-        }
-    };
+    });
+
     xhr.send();
 }
 
@@ -136,8 +122,10 @@ function setup_commands() {
     }
 }
 
-$(document).ready(function () {
+document.addEventListener("DOMContentLoaded", function () {
     "use strict";
+
+    mp3Player = document.getElementById("mp3Player");
     if (localStorage.volume) {
         mp3Player.volume = localStorage.volume;
     } else {
@@ -148,17 +136,18 @@ $(document).ready(function () {
 
     setup_commands();
 
-    $("#mp3Player").bind("play", function () {
+    mp3Player.addEventListener("play", function () {
         try {
             //check if the window exists
-            String($("#mp3Player"));
+            String(mp3Player);
             callback.updatePlayer();
             currentSong.startTime = Math.round(new Date().getTime() / 1000);
         } catch (e) {
             //if it doesn"t exist, don"t draw here
             return;
         }
-    }).bind("ended", function () {
+    });
+    mp3Player.addEventListener("ended", function () {
         if (currentSong.songRating != "1") {
             prevSongs.push(currentSong);
             //console.log("History Num = "+localStorage.historyNum);
@@ -167,10 +156,11 @@ $(document).ready(function () {
             }
         }
         nextSong();
-    }).bind("timeupdate", function () {
+    });
+    mp3Player.addEventListener("timeupdate", function () {
         try {
             //check if the window exists
-            String($("#mp3Player"));
+            String(mp3Player);
             callback.drawPlayer();
         } catch(e){
             //if it doesn"t, don"t draw here

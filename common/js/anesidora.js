@@ -1,4 +1,4 @@
-/*globals $, encrypt, decrypt, currentSong, play, prevSongs*/
+/*globals encrypt, decrypt, currentSong, play, prevSongs*/
 /*exported addFeedback, explainTrack, search, createStation, sleepSong, setQuickMix, deleteStation */
 
 //https://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format#4673436
@@ -50,8 +50,8 @@ function getSyncTime(syncTime) {
 
 function sendRequest(secure, encrypted, method, request, handler) {
     "use strict";
-    var failed = false;
-    var url, parameters;
+    let failed = false;
+    let url, parameters;
     if (localStorage.forceSecure === "true" || secure) {
         url = "https://tuner.pandora.com/services/json/?method=";
     } else {
@@ -63,41 +63,40 @@ function sendRequest(secure, encrypted, method, request, handler) {
     } else {
         parameters = "";
     }
-    var new_request;
+    let new_request;
     if (encrypted) {
         new_request = encrypt(request);
     } else {
         new_request = request;
     }
-    $.ajax({
-        async: false,
-        type: "POST",
-        url: url + method + parameters,
-        contentType: "text/plain",
-        data: new_request,
-        dataType: "json",
-        success: function (response, status, xhr) {
-            if (response.stat === "fail") {
-                switch (response.code) {
-                case 0:
-                    return;
-                case 1001:
-                    partnerLogin();
-                    break;
-                default:
-                    console.log(parameters);
-                    console.log(request);
-                    console.log(response);
-                }
-                if (method == "station.getPlaylist" && failed == false) {
-                    getPlaylist(sessionStorage.currentStation);
-                    failed = true;
-                }
-            } else {
-                handler(response, status, xhr);
+    let xhr = new XMLHttpRequest();
+    xhr.open("POST", url + method + parameters, true);
+    xhr.responseType = "json";
+    xhr.setRequestHeader("Content-Type", "text/plain");
+
+    xhr.addEventListener("load", function() {
+        if (xhr.response.stat === "fail") {
+            switch (xhr.response.code) {
+            case 0:
+                return;
+            case 1001:
+                partnerLogin();
+                break;
+            default:
+                console.log(parameters);
+                console.log(request);
+                console.log(xhr.response);
             }
+            if (method == "station.getPlaylist" && failed == false) {
+                getPlaylist(sessionStorage.currentStation);
+                failed = true;
+            }
+        } else {
+            handler(xhr.response, status, xhr);
         }
     });
+
+    xhr.send(new_request);
 }
 
 function handleGetStationList(response) {
