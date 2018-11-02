@@ -202,6 +202,9 @@ a:hover {
 	grid-row: 3 / span 1;
 	grid-column: 9 / span 1;
 }
+.buttonCell {
+    min-height: 20px;
+}
 
 #historyDiv {
 	float:left;

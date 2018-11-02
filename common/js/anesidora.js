@@ -70,29 +70,27 @@ function sendRequest(secure, encrypted, method, request, handler) {
         new_request = request;
     }
     let xhr = new XMLHttpRequest();
-    xhr.open("POST", url + method + parameters, true);
-    xhr.responseType = "json";
+    xhr.open("POST", url + method + parameters, false);
     xhr.setRequestHeader("Content-Type", "text/plain");
 
     xhr.addEventListener("load", function() {
-        if (xhr.response.stat === "fail") {
-            switch (xhr.response.code) {
+        let response = JSON.parse(xhr.responseText);
+        if (response.stat === "fail") {
+            switch (response.code) {
             case 0:
                 return;
             case 1001:
                 partnerLogin();
                 break;
             default:
-                console.log(parameters);
-                console.log(request);
-                console.log(xhr.response);
+                console.log("Fail stuff");
             }
             if (method == "station.getPlaylist" && failed == false) {
                 getPlaylist(sessionStorage.currentStation);
                 failed = true;
             }
         } else {
-            handler(xhr.response, status, xhr);
+            handler(response, status, xhr);
         }
     });
 

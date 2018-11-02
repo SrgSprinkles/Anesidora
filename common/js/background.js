@@ -7,6 +7,7 @@ var comingSong;
 var prevSongs = [];
 var mp3Player;
 
+//callbacks for messaging between the popup and background pages
 function setCallbacks(updatePlayer,drawPlayer,downloadSong){
     callback = {
         "updatePlayer": updatePlayer,
@@ -16,6 +17,9 @@ function setCallbacks(updatePlayer,drawPlayer,downloadSong){
 }
 
 function play(stationToken) {
+    /**
+     * fetch and play songs from the provided station
+     */
     if (stationToken !== localStorage.lastStation) {
         currentSong = undefined;
         getPlaylist(stationToken);
@@ -34,6 +38,9 @@ function play(stationToken) {
 }
 
 function nextSongStation(station) {
+    /**
+     * Play the next song on a given station
+     */
     localStorage.lastStation = station;
     getPlaylist(localStorage.lastStation);
     comingSong = undefined;
@@ -41,10 +48,15 @@ function nextSongStation(station) {
 }
 
 function nextSong(depth=1) {
+    /**
+     * Play the next song on the current station
+     */
     if (depth > 4){
         // console.log("What? We recursed down 4 times?");
+        //this recurses on failures to fetch "new" next songs
         return;
     }
+    //if we don't have anythign to play, get more
     if (currentPlaylist === undefined || currentPlaylist.length === 0) {
         getPlaylist(localStorage.lastStation);
     }
@@ -59,6 +71,7 @@ function nextSong(depth=1) {
     }
     comingSong = currentPlaylist.shift();
 
+    //get the url
     let song_url;
     if (currentSong.additionalAudioUrl != null) {
         song_url = currentSong.additionalAudioUrl;
@@ -66,9 +79,12 @@ function nextSong(depth=1) {
         song_url = currentSong.audioUrlMap.highQuality.audioUrl;
     }
 
+    //and play the song
     mp3Player.setAttribute("src", song_url);
     mp3Player.play();
 
+    // this XHR exists to test if the song which we are "playing" actually loaded or not.
+    // it makes a HEAD request, if that fails, it calls nextSong again
     let xhr = new XMLHttpRequest();
     xhr.open("HEAD", song_url, true);
 
@@ -89,14 +105,13 @@ function nextSong(depth=1) {
 }
 
 function downloadSong() {
+    /**
+     * Fetch the requisite URL for downloading a song
+     */
     var url = "";
     if (currentSong.additionalAudioUrl != null) {
-        // console.log("Downloading alternate url");
-        // console.log(currentSong);
         url = currentSong.additionalAudioUrl;
     } else {
-        // console.log("Downloading normal url");
-        // console.log(currentSong);
         url = currentSong.audioUrlMap.highQuality.audioUrl;
     }
     callback.downloadSong(url, currentSong.songName);
@@ -107,6 +122,9 @@ if (localStorage.username !== "" && localStorage.password !== "") {
 }
 
 function setup_commands() {
+    /**
+     * Setup hotkeys, Android cannot handle this, so it is excluded
+     */
     if (!is_android()) {
         get_browser().commands.onCommand.addListener(function(command) {
             if (command === "pause_play") {
@@ -125,18 +143,21 @@ function setup_commands() {
 document.addEventListener("DOMContentLoaded", function () {
     "use strict";
 
+    //load mp3Player stored volume if possible
     mp3Player = document.getElementById("mp3Player");
     if (localStorage.volume) {
         mp3Player.volume = localStorage.volume;
     } else {
+        //if not, don't deafen anyone
         mp3Player.volume = 0.1;
     }
 
+    //do platform specific (non-chrome) stuff
     platform_specific(get_browser());
-
     setup_commands();
 
     mp3Player.addEventListener("play", function () {
+        //whenever the mp3Player is "played"
         try {
             //check if the window exists
             String(mp3Player);
@@ -148,6 +169,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
     mp3Player.addEventListener("ended", function () {
+        //whenever a song ends, if it was good, put it in the history
+        //and play the next song
         if (currentSong.songRating != "1") {
             prevSongs.push(currentSong);
             //console.log("History Num = "+localStorage.historyNum);
@@ -157,6 +180,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         nextSong();
     });
+    //whenever the time changes, re-draw
     mp3Player.addEventListener("timeupdate", function () {
         try {
             //check if the window exists
@@ -166,7 +190,9 @@ document.addEventListener("DOMContentLoaded", function () {
             //if it doesn"t, don"t draw here
             return;
         }
-    }).bind("error", function () {
+    });
+    
+    mp3Player.addEventListener("error", function () {
         //console.log(err);
         //if (errorCount > 3) {
         //  alert("There seems to be an issue with Anesidora. To prevent Pandora account lockout Anesidora has been stopped.");

@@ -1,26 +1,45 @@
-/*globals get_browser, default_width, default_height*/
+/*globals get_browser, default_width, default_height, ScrubberView*/
 
 //https://stackoverflow.com/questions/10073699/pad-a-number-with-leading-zeros-in-javascript#answer-10074204
-// TODO: need this?
-// function zeroPad(num, places) {
-//     "use strict";
-//     if (num.toString().length >= places) {
-//         return num;
-//     }
-//     return String(Math.pow(10, places) + Math.floor(num)).substring(1);
-// }
+//pad a number with zeroes
+function zeroPad(num, places) {
+    "use strict";
+    if (num.toString().length >= places) {
+        return num;
+    }
+    return String(Math.pow(10, places) + Math.floor(num)).substring(1);
+}
 
 //https://stackoverflow.com/questions/19469881/remove-all-event-listeners-of-specific-type/46986927#46986927
+//stop all listeners on a given element
 function stopAllListeners(element, type) {
+    "use strict"
     element.addEventListener(type, function (event) {
         event.stopPropagation();
     }, true);
 }
 
+//The currently visible panel
 var currentPanel = null;
 var background = get_browser().extension.getBackgroundPage();
+var stop_draw = false;
+
+// Initialize scrubber for mp3 player
+var scrubber = new ScrubberView();
+scrubber.min(0);
+scrubber.max(100);
+
+// Initialize scrubber for volume
+var volume = new ScrubberView();
+volume.min(0);
+volume.max(100);
+volume.value(localStorage.volume ? localStorage.volume * 100 : 20);
+volume.orientation("vertical");
 
 function initBodySize() {
+    /**
+     * Initialize the body element with the stored sizes. All other elements are sized based on this
+     */
     "use strict";
     if (localStorage.bodyWidth === undefined || localStorage.bodyWidth === 0) {
         localStorage.bodyWidth = default_width;
@@ -28,14 +47,17 @@ function initBodySize() {
     if (localStorage.bodyHeight === undefined || localStorage.bodyHeight === 0) {
         localStorage.bodyHeight = default_height;
     }
-    let bodyWidth = document.getElementById("bodyWidth");
-    let bodyHeight = document.getElementById("bodyWidth");
 
-    bodyWidth.value = localStorage.bodyWidth;
-    bodyHeight.value = localStorage.bodyHeight;
+    document.body.style.width = localStorage.bodyWidth;
+    document.body.style.height = localStorage.bodyHeight;
 }
 
 function goToPanel(id) {
+    /**
+     * Direct the view to the given panel id. Does so by hiding other panels and showing visible
+     * 
+     * id: The panel to direct to
+     */
     "use strict";
     let panel = document.getElementById(id);
     if (currentPanel !== null) {
@@ -43,28 +65,40 @@ function goToPanel(id) {
             return;
         }
         //hide the other panel
-        currentPanel.hidden = true;
+        currentPanel.style.display = "none";
     }
     currentPanel = panel;
-    currentPanel.hidden = false;
+    currentPanel.style.display = "block";
 }
 
 function goToLogin() {
+    /**
+     * Direct to the login panel
+     */
     "use strict";
     goToPanel("rightPanel");
 }
 
 function goToStations() {
+    /**
+     * Direct to the stations panel
+     */
     "use strict";
     goToPanel("midPanel");
 }
 
 function goToPlayer() {
+    /**
+     * Direct to the player panel
+     */
     "use strict";
     goToPanel("leftPanel");
 }
 
 function clearHistory() {
+    /**
+     * Empty the current song history
+     */
     "use strict";
     let historyList = document.getElementById("historyList");
     while (historyList.hasChildNodes()) {
@@ -73,8 +107,11 @@ function clearHistory() {
 }
 
 function downloadSong(url, title) {
+    /**
+     * Download a song
+     */
     "use strict";
-    //making an anchor tag and clicking it allows the download dialog to work and save the file with the song"s name
+    //making an anchor tag and clicking it allows the download dialog to work and save the file with the song's name
 
     //trim the title of the song to 15 characters... not a perfect solution, but there were issues with it at full length
     title = title.substring(0, 15);
@@ -82,12 +119,16 @@ function downloadSong(url, title) {
     let a = document.createElement("a");
     a.setAttribute("href", url);
     a.setAttribute("download", title + ".mp4");
+    a.setAttribute("target", "_blank");
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 }
 
 function updateHistory() {
+    /**
+     * Add the most recent songs to the history
+     */
     "use strict";
     clearHistory();
 
@@ -163,12 +204,18 @@ function updateHistory() {
 }
 
 function goToHistory() {
+    /**
+     * Direct to the history panel
+     */
     "use strict";
     goToPanel("historyPanel");
     updateHistory();
 }
 
 function addStations() {
+    /**
+     * Add the stations from pandora to the station list UI element
+     */
     "use strict";
     background.stationList.forEach(function (station) {
         let stationListE = document.getElementById("stationList");
@@ -177,6 +224,9 @@ function addStations() {
 }
 
 function updatePlayer() {
+    /**
+     * Update the details of the player after a new song is started
+     */
     "use strict";
     if (background.currentSong) {
         let coverArt = document.getElementById("coverArt");
@@ -206,7 +256,6 @@ function updatePlayer() {
         document.getElementById("dash").innerText = " - ";
 
         let tUpButton = document.getElementById("tUpButton");
-        //let tDownButton = document.getElementById("tUpButton");
 
         if (background.currentSong.songRating) {
             stopAllListeners(tUpButton, "click");
@@ -221,18 +270,8 @@ function updatePlayer() {
         }
     }
 
-    let playButton = document.getElementById("playButton");
-    let pauseButton = document.getElementById("playButton");
-    if (background.mp3Player.paused) {
-        playButton.hidden = false;
-        pauseButton.hidden = true;
-    } else {
-        playButton.hidden = true;
-        pauseButton.hidden = false;
-    }
-
-    let scrollerText = document.getElementById("scrollerText");
-    scrollerText.addEventListener("mouseover", function (e) {
+    let nowPlaying = document.getElementById("nowPlaying");
+    nowPlaying.addEventListener("mouseover", function (e) {
         if (e.target.offsetWidth > e.target.parentElement.offsetWidth) {
             var newLeft = e.target.parentElement.offsetWidth - e.target.offsetWidth;
             var speed = Math.round((e.target.offsetWidth - e.target.parentElement.offsetWidth + e.target.offsetLeft) * 10);
@@ -245,98 +284,107 @@ function updatePlayer() {
             }, 500);
         }
     });
-    scrollerText.addEventListener("mouseout", function (e) {
+    nowPlaying.addEventListener("mouseout", function (e) {
         //move it to left immediately
         e.target.style.left = 0;
     });
 
-    //let scrubber = document.getElementById("scrubber");
-    //scrubber.THIS IS THE HARDEST PART = FUCK;
-    //TODO: 
-    // $("#scrubber").slider({
-    //     value: 0
-    // });
+    scrubber.value(0);
 }
 
 function drawPlayer() {
+    /**
+     * Draw the player. Called when the mp3Player updates time
+     */
     "use strict";
-    //TODO: fuuuk
+    let currentTime = background.mp3Player.currentTime;
+    let duration = background.mp3Player.duration;
 
-    // var curMinutes = Math.floor(background.mp3Player.currentTime / 60),
-    //     curSecondsI = Math.ceil(background.mp3Player.currentTime % 60),
-    //     curSeconds = zeroPad(curSecondsI.length === 1
-    //         ? "0" + curSecondsI
-    //         : curSecondsI, 2),
-    //     totalMinutes = Math.floor(background.mp3Player.duration / 60),
-    //     totalSecondsI = Math.ceil(background.mp3Player.duration % 60),
-    //     totalSeconds = zeroPad(totalSecondsI.length === 1
-    //         ? "0" + totalSecondsI
-    //         : totalSecondsI, 2);
+    if (stop_draw) {
+        return;
+    }
 
-    // $("#scrubber").slider({
-    //     value: (background.mp3Player.currentTime / background.mp3Player.duration) * 100
-    // }).attr("title", curMinutes + ":" + curSeconds + "/" + totalMinutes + ":" + totalSeconds);
+    let curMinutes = zeroPad(Math.floor(currentTime / 60), 2),
+        curSeconds = zeroPad(Math.ceil(currentTime % 60), 2),
+        totalMinutes = zeroPad(Math.floor(duration / 60), 2),
+        totalSeconds = zeroPad(Math.ceil(duration % 60), 2);
+
+    scrubber.value((currentTime / duration) * 100);
+    scrubber.elt.title = curMinutes + ":" + curSeconds + "/" + totalMinutes + ":" + totalSeconds;
+}
+
+function updatePlayPause() {
+    /**
+     * Update the play-pause buttons to ensure that they're in sync with the state of the mp3Player
+     */
+    let playButton = document.getElementById("playButton");
+    let pauseButton = document.getElementById("pauseButton");
+
+    if (background.mp3Player.paused) {
+        playButton.style.display = "block";
+        pauseButton.style.display = "none";
+    } else {
+        playButton.style.display = "none";
+        pauseButton.style.display = "block";
+    }
 }
 
 document.addEventListener("DOMContentLoaded", function () {
     "use strict";
-    // document.body.addEventListener("click")
-    // UWOTM8???
-    // $("body").bind("click", function (e) {
-    //     if (e.target.id !== "artistLink" && e.target.id !== "titleLink") {
-    //         $(".details").hide();
-    //     }
-    // });
+    // get initial body size and adjust it to fit
     initBodySize();
     document.body.style.width = localStorage.bodyWidth + "px";
     document.body.style.height = localStorage.bodyHeight + "px";
 
+    //Adjust the scrolling ticker (currently broken) to be 60% of the size of the body
     let scrollerContainer = document.getElementById("nowPlayingContainer");
     scrollerContainer.style.width = (localStorage.bodyWidth * 0.6) + "px";
 
+    //Each panel is the same size as the body.
+    //Don't display any of them right now
     let panels = document.getElementsByClassName("panel");
     for(let i = 0; i < panels.length; ++i) {
         panels[i].style.width = localStorage.bodyWidth + "px";
         panels[i].style.height = localStorage.bodyHeight + "px";
 
-        panels[i].hidden = true;
+        panels[i].style.display = "none";
     }
 
     let historyDiv = document.getElementById("historyDiv");
     historyDiv.style.height = localStorage.bodyHeight + "px";
 
+    //The list of history elements is slightly smaller than the body
     let historyList = document.getElementById("historyList");
     historyDiv.style.width = (localStorage.bodyWidth - 20) + "px";
     historyList.style.width = (localStorage.bodyWidth - 20) +  + "px";
 
-    //fuuuuuuuk
-    let volume = document.getElementById("volume");
-    volume.style.height = (localStorage.bodyHeight - 5)  + "px";
+    //The volume slider is slightly smaller than the body
+    let volumeCell = document.getElementById("volumeCell");
+    volumeCell.appendChild(volume.elt);
+    volume.elt.style.height = (localStorage.bodyHeight - 10)  + "px";
 
+    //The cover art is a square and shouldn't only take up 3/4's vertially or 1/10 horizontally
     let coverArt = document.getElementById("coverArt");
-    coverArt.style.minWidth = Math.min(localStorage.bodyHeight * 75, localStorage.bodyWidth * .1) + "px";
+    coverArt.style.minWidth = Math.min(localStorage.bodyHeight * 0.75, localStorage.bodyWidth * 0.1) + "px";
 
+    let scrubberCell = document.getElementById("scrubberCell");
+    scrubberCell.appendChild(scrubber.elt);
+
+    //when the scrubber is being moved, don't attempt to update the value within the time update
+    scrubber.onScrubStart = function() {
+        stop_draw = true;
+    };
+
+    //after the move finishes update the position of the song and re allow drawing
+    scrubber.onScrubEnd = function(value) {
+        stop_draw = false;
+        background.mp3Player.currentTime = background.mp3Player.duration * (value / 100);
+    };
+
+    //set the play-pause buttons to their initial state 
+    updatePlayPause();
     let playButton = document.getElementById("playButton");
     let pauseButton = document.getElementById("pauseButton");
-    if (background.mp3Player.paused) {
-        playButton.hidden = false;
-        pauseButton.hidden = true;
-    } else {
-        playButton.hidden = true;
-        pauseButton.hidden = false;
-    }
-
-    //TODO: fuuuuuuuk
-    // $("#scrubber").slider({
-    //     range: "min",
-    //     min: 0,
-    //     slide: function (ignore, ui) {
-    //         background.mp3Player.currentTime = background.mp3Player.duration * (ui.value / 100);
-    //     },
-    //     change: function (ignore, ui) {
-    //         $(ui.handle).removeClass("ui-state-focus");
-    //     }
-    // });
 
     playButton.addEventListener("click", function () {
         play_audio();
@@ -350,6 +398,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let tUpButton = document.getElementById("tUpButton");
     tUpButton.addEventListener("click", function () {
+        //after thumbs-up is clicked, send feedback, update image, and disable the button
         background.addFeedback(-1, true);
         if (background.currentSong.songRating === true) {
             stopAllListeners(tUpButton, "click");
@@ -359,13 +408,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let tDownButton = document.getElementById("tDownButton");
     tDownButton.addEventListener("click", function () {
+        //aft thumbs-down is clicked, send feedback and skip the song
         background.addFeedback(-1, false);
         setTimeout(function () {
             background.nextSong();
         }, 1000); // Small delay to stop extension from freezing for some reason
     });
 
-    let sleepButton = document.getElementById("sleepButon");
+    let sleepButton = document.getElementById("sleepButton");
     sleepButton.addEventListener("click", function () {
         background.sleepSong();
         background.nextSong();
@@ -381,79 +431,34 @@ document.addEventListener("DOMContentLoaded", function () {
         window.open("options.htm", "_blank");
     });
 
-    //TODO: fuuuuuuuk
-    // $("#volume").slider({
-    //     orientation: "vertical",
-    //     range: "min",
-    //     min: 0,
-    //     max: 70,
-    //     value: (localStorage.volume)
-    //         ? localStorage.volume * 100
-    //         : 20,
-    //     slide: function (ignore, ui) {
-    //         background.mp3Player.volume = ui.value / 100;
-    //     },
-    //     stop: function (ignore, ui) {
-    //         $(ui.handle).removeClass("ui-state-focus");
-    //         localStorage.volume = ui.value / 100;
-    //     }
-    // });
+    volume.onScrubEnd = function (value) {
+        //when the volume scrubber is adjusted, update the volume
+        localStorage.volume = value / 100;
+        background.mp3Player.volume = value / 100;
+    };
 
     let nextButton = document.getElementById("nextButton");
     nextButton.addEventListener("click", function () {
-        //move to midpanel
         goToStations();
     });
 
     let stationList = document.getElementById("stationList");
     stationList.addEventListener("change", function () {
+        //after selecting a station, start playing and go to the player panel
         background.nextSongStation(stationList.selectedOptions[0].value);
         goToPlayer();
     });
 
     let unWarning = document.getElementById("unWarning");
-    unWarning.hidden = true;
-
     let pwWarning = document.getElementById("pwWarning");
-    pwWarning.hidden = true;
-
     let rightWarnRow = document.getElementById("rightWarnRow");
-    rightWarnRow.hidden = true;
-
-    let login = document.getElementById("login");
-    login.addEventListener("submit", function () {
-        let username = document.getElementById("username");
-        let password = document.getElementById("password");
-
-        localStorage.username = username.value;
-        localStorage.password = password.value;
-        background.partnerLogin();
-        if (background.userAuthToken === "") {
-            unWarning.hidden = false;
-            pwWarning.hidden = false;
-            rightWarnRow.hidden = false;
-
-            //TODO: WHY?
-            // $("#username").css({
-            //     "padding-left": "16px",
-            //     "width": "216px"
-            // });
-            // $("#password").css({
-            //     "padding-left": "16px",
-            //     "width": "216px"
-            // });
-            return false;
-        } else {
-            addStations();
-            //move to mid panel
-            goToStations();
-            return false;
-        }
-    });
 
     if (background.stationList !== undefined) {
+        //if we have a list of stations, add them
         addStations();
     }
+
+    //if not logged in
     if (localStorage.username === undefined
             || localStorage.password === undefined
             || background.userAuthToken === undefined
@@ -464,8 +469,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         if (!localStorage.lastStation) {
             goToStations();
-        }
-        if (localStorage.lastStation) {
+        } else {
             goToPlayer();
         }
     }
@@ -485,8 +489,35 @@ document.addEventListener("DOMContentLoaded", function () {
         goToPlayer();
     });
 
+    let login = document.getElementById("login");
+    login.onsubmit = function () {
+        //after someone attempts to login, clear any old data
+        background.stationList = [];
+        background.currentSong = undefined;
+        background.currentPlaylist = undefined;
+
+        let username = document.getElementById("username");
+        let password = document.getElementById("password");
+
+        localStorage.username = username.value;
+        localStorage.password = password.value;
+        background.partnerLogin();
+        if (background.userAuthToken === "") {
+            //if the login was a failure, show some error details
+            unWarning.style.display = "block";
+            pwWarning.style.display = "block";
+            rightWarnRow.style.display = "block";
+        } else {
+            //if it was a success, show the stations
+            addStations();
+            goToStations();
+        }
+        return false;
+    };
+
     if (background.mp3Player.src !== "") {
         if (background.mp3Player.currentTime > 0) {
+            //if we are playing music right now, then update the player with the current details
             updatePlayer();
             drawPlayer();
         }
@@ -496,23 +527,19 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function pause_audio () {
+    /**
+     * Pause the audio and update the buttons
+     */
     background.mp3Player.pause();
-
-    let playButton = document.getElementById("playButton");
-    let pauseButton = document.getElementById("pauseButton");
-
-    pauseButton.hidden = true;
-    playButton.hidden = false;
+    updatePlayPause();
 }
 
 function play_audio () {
+    /**
+     * Play the audio and update the buttons
+     */
     background.play(localStorage.lastStation);
-
-    let playButton = document.getElementById("playButton");
-    let pauseButton = document.getElementById("pauseButton");
-
-    pauseButton.hidden = false;
-    playButton.hidden = true;
+    updatePlayPause();
 }
 
 background.setCallbacks(updatePlayer, drawPlayer, downloadSong);
